@@ -153,6 +153,14 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
   }
 
   @override
+  Future<String?> getTracks(int? textureId){
+    return  _channel.invokeMethod<String?>(
+      'getTracks',
+       <String, dynamic>{'textureId': textureId},
+    );
+  }
+
+  @override
   Future<void> setVolume(int? textureId, double volume) {
     return _channel.invokeMethod<void>(
       'setVolume',

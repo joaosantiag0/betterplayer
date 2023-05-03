@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -13,61 +12,56 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import com.jhomlala.better_player.DataSourceUtils.getUserAgent
-import com.jhomlala.better_player.DataSourceUtils.isHTTP
-import com.jhomlala.better_player.DataSourceUtils.getDataSourceFactory
-import io.flutter.plugin.common.EventChannel
-import io.flutter.view.TextureRegistry.SurfaceTextureEntry
-import io.flutter.plugin.common.MethodChannel
-import com.google.android.exoplayer2.trackselection.DefaultTrackSelector
-import com.google.android.exoplayer2.ui.PlayerNotificationManager
-import android.support.v4.media.session.MediaSessionCompat
-import com.google.android.exoplayer2.drm.DrmSessionManager
-import androidx.work.WorkManager
-import androidx.work.WorkInfo
-import com.google.android.exoplayer2.drm.HttpMediaDrmCallback
-import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
-import com.google.android.exoplayer2.drm.DefaultDrmSessionManager
-import com.google.android.exoplayer2.drm.FrameworkMediaDrm
-import com.google.android.exoplayer2.drm.UnsupportedDrmException
-import com.google.android.exoplayer2.drm.DummyExoMediaDrm
-import com.google.android.exoplayer2.drm.LocalMediaDrmCallback
-import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
-import com.google.android.exoplayer2.source.MediaSource
-import com.google.android.exoplayer2.source.ClippingMediaSource
-import com.google.android.exoplayer2.ui.PlayerNotificationManager.MediaDescriptionAdapter
-import com.google.android.exoplayer2.ui.PlayerNotificationManager.BitmapCallback
-import androidx.work.OneTimeWorkRequest
-import android.support.v4.media.session.PlaybackStateCompat
 import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import android.util.Log
 import android.view.Surface
 import androidx.lifecycle.Observer
-import com.google.android.exoplayer2.source.smoothstreaming.SsMediaSource
-import com.google.android.exoplayer2.source.smoothstreaming.DefaultSsChunkSource
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequest
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import com.google.android.exoplayer2.*
+import com.google.android.exoplayer2.audio.AudioAttributes
+import com.google.android.exoplayer2.drm.*
+import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector
+import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory
+import com.google.android.exoplayer2.source.ClippingMediaSource
+import com.google.android.exoplayer2.source.MediaSource
+import com.google.android.exoplayer2.source.ProgressiveMediaSource
+import com.google.android.exoplayer2.source.TrackGroupArray
 import com.google.android.exoplayer2.source.dash.DashMediaSource
 import com.google.android.exoplayer2.source.dash.DefaultDashChunkSource
 import com.google.android.exoplayer2.source.hls.HlsMediaSource
-import com.google.android.exoplayer2.source.ProgressiveMediaSource
-import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory
-import io.flutter.plugin.common.EventChannel.EventSink
-import androidx.media.session.MediaButtonReceiver
-import androidx.work.Data
-import com.google.android.exoplayer2.*
-import com.google.android.exoplayer2.audio.AudioAttributes
-import com.google.android.exoplayer2.drm.DrmSessionManagerProvider
-import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector
+import com.google.android.exoplayer2.source.smoothstreaming.DefaultSsChunkSource
+import com.google.android.exoplayer2.source.smoothstreaming.SsMediaSource
+import com.google.android.exoplayer2.trackselection.DefaultTrackSelector
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector.SelectionOverride
+import com.google.android.exoplayer2.trackselection.MappingTrackSelector
 import com.google.android.exoplayer2.trackselection.TrackSelectionOverrides
+import com.google.android.exoplayer2.ui.DefaultTrackNameProvider
+import com.google.android.exoplayer2.ui.PlayerNotificationManager
+import com.google.android.exoplayer2.ui.PlayerNotificationManager.BitmapCallback
+import com.google.android.exoplayer2.ui.PlayerNotificationManager.MediaDescriptionAdapter
 import com.google.android.exoplayer2.upstream.DataSource
 import com.google.android.exoplayer2.upstream.DefaultDataSource
+import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
+import com.google.android.exoplayer2.util.Assertions
 import com.google.android.exoplayer2.util.Util
+import com.google.gson.Gson
+import com.jhomlala.better_player.DataSourceUtils.getDataSourceFactory
+import com.jhomlala.better_player.DataSourceUtils.getUserAgent
+import com.jhomlala.better_player.DataSourceUtils.isHTTP
+import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.EventChannel.EventSink
+import io.flutter.plugin.common.MethodChannel
+import io.flutter.view.TextureRegistry.SurfaceTextureEntry
 import java.io.File
-import java.lang.Exception
-import java.lang.IllegalStateException
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
+
 
 internal class BetterPlayer(
     context: Context,
@@ -76,6 +70,7 @@ internal class BetterPlayer(
     customDefaultLoadControl: CustomDefaultLoadControl?,
     result: MethodChannel.Result
 ) {
+    private val context: Context = context
     private val exoPlayer: ExoPlayer?
     private val eventSink = QueuingEventSink()
     private val trackSelector: DefaultTrackSelector = DefaultTrackSelector(context)
@@ -112,6 +107,71 @@ internal class BetterPlayer(
         workManager = WorkManager.getInstance(context)
         workerObserverMap = HashMap()
         setupVideoPlayer(eventChannel, textureEntry, result)
+    }
+
+    fun getTracks(result: MethodChannel.Result) {
+        val listTracks = mutableListOf<BetterPlayerTrack>()
+        val mappedTrackInfo: MappingTrackSelector.MappedTrackInfo = Assertions.checkNotNull(trackSelector.currentMappedTrackInfo)
+        val parameters = trackSelector.parameters
+
+        for (rendererIndex in 0 until mappedTrackInfo.getRendererCount()) {
+            val trackType: Int = mappedTrackInfo.getRendererType(rendererIndex)
+            val trackGroupArray: TrackGroupArray = mappedTrackInfo.getTrackGroups(rendererIndex)
+            val isRendererDisabled = parameters.getRendererDisabled(rendererIndex)
+            val selectionOverride = parameters.getSelectionOverride(rendererIndex, trackGroupArray)
+            //Log.d(TAG, "------------------------------------------------------Track item $rendererIndex------------------------------------------------------")
+            //Log.d(TAG, "track type: " + trackTypeToName(trackType))
+            for (groupIndex in 0 until trackGroupArray.length) {
+                for (trackIndex in 0 until trackGroupArray.get(groupIndex).length) {
+                    val trackName: String = DefaultTrackNameProvider(context.resources).getTrackName(trackGroupArray.get(groupIndex).getFormat(trackIndex))
+                    val isTrackSupported = mappedTrackInfo.getTrackSupport(rendererIndex, groupIndex, trackIndex) === RendererCapabilities.FORMAT_HANDLED
+                    //Log.d(TAG, "track item $groupIndex: trackName: $trackName, isTrackSupported: $isTrackSupported")
+                    val track = BetterPlayerTrack(trackType, trackName, groupIndex);
+                    listTracks.add(track)
+                }
+            }
+            //Log.d(TAG, "isRendererDisabled: $isRendererDisabled")
+        }
+        result.success(Gson().toJsonTree(listTracks).asJsonArray.toString())
+    }
+
+
+    fun setAudioTrack(track: Int) {
+        setTrack(C.TRACK_TYPE_AUDIO, track)
+    }
+
+    fun setVideoTrack(track: Int) {
+        setTrack(C.TRACK_TYPE_VIDEO, track)
+    }
+
+    fun setSubtitleTrack(track: Int) {
+        setTrack(C.TRACK_TYPE_TEXT, track)
+    }
+
+    fun setTrack(type: Int, track: Int) {
+        val mappedTrackInfo = Assertions.checkNotNull(trackSelector.currentMappedTrackInfo)
+        val parameters = trackSelector.parameters
+        val builder = parameters.buildUpon()
+        for (rendererIndex in 0 until mappedTrackInfo.rendererCount) {
+            val trackType = mappedTrackInfo.getRendererType(rendererIndex)
+            if (trackType == type) {
+                builder.clearSelectionOverrides(rendererIndex).setRendererDisabled(rendererIndex, false)
+                val groupIndex = track - 1
+                val tracks = intArrayOf(0)
+                val override = SelectionOverride(groupIndex, *tracks)
+                builder.setSelectionOverride(rendererIndex, mappedTrackInfo.getTrackGroups(rendererIndex), override)
+            }
+        }
+        trackSelector.setParameters(builder)
+    }
+
+    private fun trackTypeToName(trackType: Int): String? {
+        return when (trackType) {
+            C.TRACK_TYPE_VIDEO -> "TRACK_TYPE_VIDEO"
+            C.TRACK_TYPE_AUDIO -> "TRACK_TYPE_AUDIO"
+            C.TRACK_TYPE_TEXT -> "TRACK_TYPE_TEXT"
+            else -> "Invalid track type"
+        }
     }
 
     fun setDataSource(

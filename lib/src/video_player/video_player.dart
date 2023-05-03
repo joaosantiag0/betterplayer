@@ -448,6 +448,11 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
     await _applyPlayPause();
   }
 
+
+  Future<String?> getTracks() async {
+    return await _videoPlayerPlatform.getTracks(_textureId);
+  }
+
   Future<void> _applyLooping() async {
     if (!_created || _isDisposed) {
       return;
