@@ -4,8 +4,9 @@ class BetterPlayerTrack {
   int type = 0;
   String name = "";
   int index = 0;
+  bool isSupported = false;
 
-  BetterPlayerTrack(this.type, this.name, this.index);
+  BetterPlayerTrack(this.type, this.name, this.index, this.isSupported);
 
   static List<BetterPlayerTrack> fromJsonArray(String jsonArrayString) {
     if(jsonArrayString.length < 3) return [];
@@ -21,6 +22,7 @@ class BetterPlayerTrack {
     type = json['type'];
     name = json['name'];
     index = json['index'];
+    isSupported = json['isSupported'];
   }
 
   static int TYPE_AUDIO = 1;

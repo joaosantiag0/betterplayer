@@ -223,6 +223,20 @@ class BetterPlayerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             GET_TRACKS -> {
                 player.getTracks(result)
             }
+            SET_AUDIO ->{
+                val audioTrack = call.argument<Int?>(INDEX_PARAMETER)
+                if (audioTrack != null) {
+                    player.setAudioTrack(audioTrack)
+                }
+                result.success(null)
+            }
+            SET_SUBTITLE ->{
+                val subtitleTrack = call.argument<Int?>(INDEX_PARAMETER)
+                if (subtitleTrack != null) {
+                    player.setSubtitleTrack(subtitleTrack)
+                }
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -527,6 +541,8 @@ class BetterPlayerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         const val BUFFER_FOR_PLAYBACK_MS = "bufferForPlaybackMs"
         const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = "bufferForPlaybackAfterRebufferMs"
         const val CACHE_KEY_PARAMETER = "cacheKey"
+        const val SET_AUDIO = "setAudio"
+        const val SET_SUBTITLE = "setSubtitle"
         private const val INIT_METHOD = "init"
         private const val CREATE_METHOD = "create"
         private const val SET_DATA_SOURCE_METHOD = "setDataSource"

@@ -160,6 +160,23 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
     );
   }
 
+
+  @override
+  Future<void> setAudio(int? textureId, int? index) {
+    return  _channel.invokeMethod<void>(
+      'setAudio',
+      <String, dynamic>{'textureId': textureId, 'index': index},
+    );
+  }
+
+  @override
+  Future<void> setSubtitle(int? textureId, int? index) {
+    return  _channel.invokeMethod<void>(
+      'setSubtitle',
+      <String, dynamic>{'textureId': textureId, 'index': index},
+    );
+  }
+
   @override
   Future<void> setVolume(int? textureId, double volume) {
     return _channel.invokeMethod<void>(
@@ -450,4 +467,6 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
       Duration(milliseconds: pair[1] as int),
     );
   }
+
+
 }

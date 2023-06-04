@@ -453,6 +453,14 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
     return await _videoPlayerPlatform.getTracks(_textureId);
   }
 
+  Future<void> setAudio(int index) async {
+    await _videoPlayerPlatform.setAudio(_textureId, index);
+  }
+
+  Future<void> setSubtitle(int index) async {
+    await _videoPlayerPlatform.setSubtitle(_textureId, index);
+  }
+
   Future<void> _applyLooping() async {
     if (!_created || _isDisposed) {
       return;

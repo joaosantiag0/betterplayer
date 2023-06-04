@@ -30,15 +30,12 @@ import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory
 import com.google.android.exoplayer2.source.ClippingMediaSource
 import com.google.android.exoplayer2.source.MediaSource
 import com.google.android.exoplayer2.source.ProgressiveMediaSource
-import com.google.android.exoplayer2.source.TrackGroupArray
 import com.google.android.exoplayer2.source.dash.DashMediaSource
 import com.google.android.exoplayer2.source.dash.DefaultDashChunkSource
 import com.google.android.exoplayer2.source.hls.HlsMediaSource
 import com.google.android.exoplayer2.source.smoothstreaming.DefaultSsChunkSource
 import com.google.android.exoplayer2.source.smoothstreaming.SsMediaSource
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector
-import com.google.android.exoplayer2.trackselection.DefaultTrackSelector.SelectionOverride
-import com.google.android.exoplayer2.trackselection.MappingTrackSelector
 import com.google.android.exoplayer2.trackselection.TrackSelectionOverrides
 import com.google.android.exoplayer2.ui.DefaultTrackNameProvider
 import com.google.android.exoplayer2.ui.PlayerNotificationManager
@@ -47,7 +44,6 @@ import com.google.android.exoplayer2.ui.PlayerNotificationManager.MediaDescripti
 import com.google.android.exoplayer2.upstream.DataSource
 import com.google.android.exoplayer2.upstream.DefaultDataSource
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
-import com.google.android.exoplayer2.util.Assertions
 import com.google.android.exoplayer2.util.Util
 import com.google.gson.Gson
 import com.jhomlala.better_player.DataSourceUtils.getDataSourceFactory
@@ -99,8 +95,10 @@ internal class BetterPlayer(
             this.customDefaultLoadControl.bufferForPlaybackMs,
             this.customDefaultLoadControl.bufferForPlaybackAfterRebufferMs
         )
+        val rendereres = DefaultRenderersFactory(context).setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
         loadControl = loadBuilder.build()
         exoPlayer = ExoPlayer.Builder(context)
+                .setRenderersFactory(rendereres)
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .build()
@@ -111,36 +109,57 @@ internal class BetterPlayer(
 
     fun getTracks(result: MethodChannel.Result) {
         val listTracks = mutableListOf<BetterPlayerTrack>()
-        val mappedTrackInfo: MappingTrackSelector.MappedTrackInfo = Assertions.checkNotNull(trackSelector.currentMappedTrackInfo)
-        val parameters = trackSelector.parameters
-
-        for (rendererIndex in 0 until mappedTrackInfo.getRendererCount()) {
-            val trackType: Int = mappedTrackInfo.getRendererType(rendererIndex)
-            val trackGroupArray: TrackGroupArray = mappedTrackInfo.getTrackGroups(rendererIndex)
-            val isRendererDisabled = parameters.getRendererDisabled(rendererIndex)
-            val selectionOverride = parameters.getSelectionOverride(rendererIndex, trackGroupArray)
-            //Log.d(TAG, "------------------------------------------------------Track item $rendererIndex------------------------------------------------------")
-            //Log.d(TAG, "track type: " + trackTypeToName(trackType))
-            for (groupIndex in 0 until trackGroupArray.length) {
-                for (trackIndex in 0 until trackGroupArray.get(groupIndex).length) {
-                    val trackName: String = DefaultTrackNameProvider(context.resources).getTrackName(trackGroupArray.get(groupIndex).getFormat(trackIndex))
-                    val isTrackSupported = mappedTrackInfo.getTrackSupport(rendererIndex, groupIndex, trackIndex) === RendererCapabilities.FORMAT_HANDLED
-                    //Log.d(TAG, "track item $groupIndex: trackName: $trackName, isTrackSupported: $isTrackSupported")
-                    val track = BetterPlayerTrack(trackType, trackName, groupIndex);
-                    listTracks.add(track)
-                }
+        var groupI = 0;
+        for (groupInfo in exoPlayer!!.currentTracksInfo.trackGroupInfos) {
+            // Group level information.
+            val trackType = groupInfo.trackType
+            val trackInGroupIsSelected = groupInfo.isSelected
+            val trackInGroupIsSupported = groupInfo.isSupported
+            val group = groupInfo.trackGroup
+            for (i in 0 until group.length) {
+                // Individual track information.
+                val isSupported = groupInfo.isTrackSupported(i)
+                val isSelected = groupInfo.isTrackSelected(i)
+                val trackFormat = group.getFormat(i)
+                val trackName = DefaultTrackNameProvider(context.resources).getTrackName(trackFormat)
+                val track = BetterPlayerTrack(trackType, trackName, groupI,isSupported);
+                listTracks.add(track)
             }
-            //Log.d(TAG, "isRendererDisabled: $isRendererDisabled")
+            groupI++
         }
+
+
+        // get tracks of audio
+        //val mappedTrackInfo: MappingTrackSelector.MappedTrackInfo = Assertions.checkNotNull(trackSelector.currentMappedTrackInfo)
+        //val parameters = trackSelector.parameters
+//
+        //for (rendererIndex in 0 until mappedTrackInfo.getRendererCount()) {
+        //    val trackType: Int = mappedTrackInfo.getRendererType(rendererIndex)
+        //    val trackGroupArray: TrackGroupArray = mappedTrackInfo.getTrackGroups(rendererIndex)
+        //    val isRendererDisabled = parameters.getRendererDisabled(rendererIndex)
+        //    val selectionOverride = parameters.getSelectionOverride(rendererIndex, trackGroupArray)
+        //    //Log.d(TAG, "------------------------------------------------------Track item $rendererIndex------------------------------------------------------")
+        //    //Log.d(TAG, "track type: " + trackTypeToName(trackType))
+        //    for (groupIndex in 0 until trackGroupArray.length) {
+        //        for (trackIndex in 0 until trackGroupArray.get(groupIndex).length) {
+        //            val trackName: String = DefaultTrackNameProvider(context.resources).getTrackName(trackGroupArray.get(groupIndex).getFormat(trackIndex))
+        //            val isTrackSupported = mappedTrackInfo.getTrackSupport(rendererIndex, groupIndex, trackIndex) === RendererCapabilities.FORMAT_HANDLED
+        //            //Log.d(TAG, "track item $groupIndex: trackName: $trackName, isTrackSupported: $isTrackSupported")
+        //        }
+        //    }
+        //    //Log.d(TAG, "isRendererDisabled: $isRendererDisabled")
+        //}
         result.success(Gson().toJsonTree(listTracks).asJsonArray.toString())
     }
 
 
     fun setAudioTrack(track: Int) {
+        Log.d(TAG, "setAudioTrack: $track")
         setTrack(C.TRACK_TYPE_AUDIO, track)
     }
 
     fun setVideoTrack(track: Int) {
+        Log.d(TAG, "setVideoTrack: $track")
         setTrack(C.TRACK_TYPE_VIDEO, track)
     }
 
@@ -149,20 +168,14 @@ internal class BetterPlayer(
     }
 
     fun setTrack(type: Int, track: Int) {
-        val mappedTrackInfo = Assertions.checkNotNull(trackSelector.currentMappedTrackInfo)
-        val parameters = trackSelector.parameters
-        val builder = parameters.buildUpon()
-        for (rendererIndex in 0 until mappedTrackInfo.rendererCount) {
-            val trackType = mappedTrackInfo.getRendererType(rendererIndex)
-            if (trackType == type) {
-                builder.clearSelectionOverrides(rendererIndex).setRendererDisabled(rendererIndex, false)
-                val groupIndex = track - 1
-                val tracks = intArrayOf(0)
-                val override = SelectionOverride(groupIndex, *tracks)
-                builder.setSelectionOverride(rendererIndex, mappedTrackInfo.getTrackGroups(rendererIndex), override)
-            }
-        }
-        trackSelector.setParameters(builder)
+        val groupInfo = exoPlayer!!.currentTracksInfo.trackGroupInfos[track]
+        val overrides = TrackSelectionOverrides.Builder()
+                .setOverrideForType(TrackSelectionOverrides.TrackSelectionOverride(groupInfo.trackGroup))
+                .build()
+        exoPlayer.setTrackSelectionParameters(
+                exoPlayer.getTrackSelectionParameters()
+                        .buildUpon().setTrackSelectionOverrides(overrides).build())
+
     }
 
     private fun trackTypeToName(trackType: Int): String? {

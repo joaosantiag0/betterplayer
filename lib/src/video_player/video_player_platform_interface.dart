@@ -110,6 +110,14 @@ abstract class VideoPlayerPlatform {
     throw UnimplementedError('getTracks() has not been implemented.');
   }
 
+  Future<void> setAudio(int? textureId, int? index) {
+    throw UnimplementedError('setAudioTrack() has not been implemented.');
+  }
+
+  Future<void> setSubtitle(int? textureId, int? index) {
+    throw UnimplementedError('setSubtitle() has not been implemented.');
+  }
+
   /// Sets the volume to a range between 0.0 and 1.0.
   Future<void> setVolume(int? textureId, double volume) {
     throw UnimplementedError('setVolume() has not been implemented.');

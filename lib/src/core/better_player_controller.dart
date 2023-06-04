@@ -653,6 +653,22 @@ class BetterPlayerController {
     return BetterPlayerTrack.fromJsonArray(json);
   }
 
+  Future<void> setAudio(int index) async {
+    if (videoPlayerController == null) {
+      throw StateError("The data source has not been initialized");
+    }
+
+    await videoPlayerController!.setAudio(index);
+  }
+
+  Future<void> setSubtitle(int index) async {
+    if (videoPlayerController == null) {
+      throw StateError("The data source has not been initialized");
+    }
+
+    await videoPlayerController!.setSubtitle(index);
+  }
+
   ///Move player to specific position/moment of the video.
   Future<void> seekTo(Duration moment) async {
     if (videoPlayerController == null) {
